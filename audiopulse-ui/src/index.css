@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* Configuración de Temas y Colores Personalizados en Tailwind v4 */
+@theme {
+  --color-health-50: #f0fdf4;
+  --color-health-100: #dcfce7;
+  --color-health-500: #22c55e;
+  --color-health-600: #16a34a;
+  --color-health-900: #14532d;
+
+  --color-pulse-50: #fef2f2;
+  --color-pulse-100: #fee2e2;
+  --color-pulse-500: #ef4444;
+  --color-pulse-600: #dc2626;
+  --color-pulse-900: #7f1d1d;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Animación suave para la aparición de las tarjetas de diagnóstico */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out forwards;
+}
