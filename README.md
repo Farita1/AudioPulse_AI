@@ -44,6 +44,9 @@ El proyecto está estructurado bajo una arquitectura desacoplada y contenerizada
 
 ---
 
+Los archivos que use para entrenar el modelo de IA están aquí:
+https://storage.googleapis.com/kaggle-data-sets/453/923/bundle/archive.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20260612%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260612T013647Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=a06261599006aab7e550938b41ff0d25624c37560150617eb8d2467e76cad35b8fdb39a85c004595a245d122988433a9ab2be6a1067396b2600a9bb85236a9974cd0cbb3135aa5e5453d7a66df774caa6e5bc5e2dca968d0a6c9bcb631779465697f297d79acd398a08ea395a6b63097510e45a2c04e1dbaafb72cf5f434b7cea5d06c4102a0ed0492c99691a50a73296f489ed59ebecb5b0024fdefd638d51f5f7596105cbb01d3230414bf5600e391af48418a42975618b23b885940543d712fe49765696410ab9876f41280183d0570d195abba5447d7d0500b8cf206b78e136e2c57ba1ed8790c040ccb4b079ecbdf5a78578cf9f6b90a5171f45c480128
+
 ## 🚀 Instrucciones para Ejecución Local (Docker Compose)
 
 La forma más rápida y recomendada para levantar el ecosistema completo (Frontend, Backend, Base de Datos y pgAdmin) de manera integrada es utilizando Docker.
