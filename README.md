@@ -52,3 +52,57 @@ La forma más rápida y recomendada para levantar el ecosistema completo (Fronte
 ```bash
 git clone [https://github.com/Farita1/proyectos.git](https://github.com/Farita1/proyectos.git)
 cd proyectos
+
+2. Configurar variables de entorno
+Antes de levantar los contenedores, asegúrate de crear y configurar los archivos .env necesarios tanto en la raíz como en las carpetas específicas para enlazar tus llaves de AWS S3 (Access Key, Secret Key, Región y Bucket Name) y las credenciales de PostgreSQL.
+
+3. Levantar la plataforma completa
+Ejecuta el siguiente comando en tu terminal para compilar las imágenes e iniciar los servicios en segundo plano:
+
+Bash
+docker-compose up --build -d
+4. Puertos y Acceso Local
+Una vez levantado el ecosistema, podrás acceder a las siguientes plataformas:
+
+Frontend UI (React + Vite): http://localhost:5173
+
+Backend API Docs (FastAPI/Swagger): http://localhost:8000/docs
+
+Panel de Base de Datos (pgAdmin): http://localhost:5050
+
+🛠️ Ejecución Local para Desarrollo Tradicional (Sin Docker)
+Si prefieres realizar modificaciones en caliente directamente sobre tu máquina local:
+
+Levantando el Backend (audiopulse-ai)
+Bash
+cd audiopulse-ai
+python -m venv entorno
+
+# En Windows (PowerShell):
+.\entorno\Scripts\activate
+
+# En Linux/macOS:
+source entorno/bin/activate
+
+pip install -r requirements.txt
+uvicorn api.main:app --reload
+Levantando el Frontend (audiopulse-ui)
+Abre una nueva pestaña en tu terminal y ejecuta:
+
+Bash
+cd audiopulse-ui
+npm install
+npm run dev
+Developed by Juan David Perez Villalobos — Systems Engineering Student & Junior Backend Developer.
+
+
+---
+
+## 🔄 Subir la documentación a tu GitHub
+
+Una vez que actualices el archivo `README.md` en la raíz de tu proyecto local, ejecuta estos tres comandos en tu consola de PowerShell para subir los cambios a tu repositorio remoto de inmediato:
+
+```bash
+git add README.md
+git commit -m "docs: actualizar README con arquitectura monorepo, docker-compose y especificaciones de IA"
+git push origin main
