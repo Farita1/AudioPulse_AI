@@ -94,15 +94,3 @@ cd audiopulse-ui
 npm install
 npm run dev
 Developed by Juan David Perez Villalobos — Systems Engineering Student & Junior Backend Developer.
-
-
----
-
-## 🔄 Subir la documentación a tu GitHub
-
-Una vez que actualices el archivo `README.md` en la raíz de tu proyecto local, ejecuta estos tres comandos en tu consola de PowerShell para subir los cambios a tu repositorio remoto de inmediato:
-
-```bash
-git add README.md
-git commit -m "docs: actualizar README con arquitectura monorepo, docker-compose y especificaciones de IA"
-git push origin main
