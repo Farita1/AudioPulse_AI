@@ -1,32 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-function App() {
+export default function App() {
+  // Estados para el formulario del paciente
+  const [cedula, setCedula] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [edad, setEdad] = useState('');
   const [file, setFile] = useState(null);
+
+  // Estados para la respuesta del servidor e interfaz
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  // Estado para almacenar el historial de la Base de Datos
+  const [history, setHistory] = useState([]);
+
+  // Cargar el historial clínico al montar el componente
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/history');
+      if (response.ok) {
+        const data = await response.json();
+        setHistory(data);
+      }
+    } catch (err) {
+      console.error("Error cargando el historial clínico:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
-      setResult(null);
       setError(null);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    
+    if (!cedula || !nombre || !edad || !file) {
+      setError('Por favor, completa todos los campos del paciente y selecciona un archivo de audio.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
     setResult(null);
 
     const formData = new FormData();
+    formData.append('cedula', cedula);
+    formData.append('nombre', nombre);
+    formData.append('edad', parseInt(edad));
     formData.append('file', file);
 
     try {
-      // Conexión directa a tu API local de FastAPI
       const response = await fetch('http://127.0.0.1:8000/api/v1/predict', {
         method: 'POST',
         body: formData,
@@ -34,11 +65,20 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al procesar el audio cardíaco.');
+        throw new Error(errorData.detail || 'Error al procesar el screening.');
       }
 
       const data = await response.json();
       setResult(data);
+      
+      // Insertar el nuevo registro al inicio del historial de forma reactiva
+      setHistory((prevHistory) => [data, ...prevHistory]);
+      
+      // Limpiar formulario para el siguiente paciente
+      setCedula('');
+      setNombre('');
+      setEdad('');
+      setFile(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -47,165 +87,221 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between">
-      {/* Navbar de la Aplicación */}
-      <header className="bg-white border-b border-slate-200 py-4 px-6 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-pulse-500 text-white p-2 rounded-lg animate-pulse">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="font-bold text-xl text-slate-900 tracking-tight">AudioPulse AI</h1>
-              <p className="text-xs text-slate-500 font-medium">Cardiovascular Acoustic Intelligence</p>
-            </div>
-          </div>
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-health-100 text-health-900">
-            API Online
-          </span>
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans flex flex-col">
+      {/* Header Clínico */}
+      <header className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-3 w-3 bg-emerald-500 rounded-full animate-pulse" />
+          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+            AudioPulse AI <span className="text-xs text-slate-500 font-mono px-2 py-0.5 border border-slate-800 rounded bg-slate-900">v1.2.0</span>
+          </h1>
         </div>
+        <div className="text-xs text-slate-400 font-mono">Estación Médica Local con Persistencia SQL</div>
       </header>
 
       {/* Contenido Principal */}
-      <main className="flex-grow max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col justify-center">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-8">
+        
+        {/* Fila Superior: Operaciones */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          
-          {/* Columna Izquierda: Panel de Carga */}
-          <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-800 mb-2">Análisis de Fonocardiograma</h2>
-            <p className="text-sm text-slate-500 mb-6">Suba una grabación de audio en formato WAV proveniente de un estetoscopio digital para iniciar el tamizaje algorítmico.</p>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="border-2 border-dashed border-slate-300 hover:border-health-500 rounded-xl p-8 text-center bg-slate-50 transition cursor-pointer relative">
+          {/* Columna Izquierda: Formulario */}
+          <section className="bg-slate-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
+              <span>📋</span> Registro de Screening Cardíaco
+            </h2>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">Cédula de Ciudadanía</label>
                 <input 
-                  type="file" 
-                  accept=".wav" 
-                  onChange={handleFileChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  type="text" 
+                  value={cedula}
+                  onChange={(e) => setCedula(e.target.value)}
+                  placeholder="Ej. 1140000000"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-600 text-white"
                 />
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
-                <p className="text-sm font-semibold text-slate-700">
-                  {file ? file.name : "Seleccionar archivo .wav"}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">Formatos de audio biométricos nativos</p>
               </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">Nombre Completo del Paciente</label>
+                <input 
+                  type="text" 
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Ej. Carlos Mendoza"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-600 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">Edad</label>
+                <input 
+                  type="number" 
+                  value={edad}
+                  onChange={(e) => setEdad(e.target.value)}
+                  placeholder="Ej. 45"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-600 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">Fonocardiograma Acústico (.wav)</label>
+                <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl p-4 transition-colors bg-slate-900/50 text-center relative">
+                  <input 
+                    type="file" 
+                    accept=".wav"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <span className="text-2xl block mb-1">🫀</span>
+                  <p className="text-xs text-slate-300 font-medium truncate max-w-[250px] mx-auto">
+                    {file ? file.name : "Arrastra o selecciona el archivo acústico"}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">Formato de audio digital PCM .WAV</p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-lg text-xs text-red-400">
+                  ⚠️ {error}
+                </div>
+              )}
 
               <button
                 type="submit"
-                disabled={!file || loading}
-                className={`w-full py-3 px-4 rounded-xl font-bold text-white shadow-md transition duration-200 flex items-center justify-center space-x-2 ${
-                  !file || loading 
-                    ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                    : 'bg-health-600 hover:bg-health-500 active:scale-[0.98]'
+                disabled={loading}
+                className={`w-full py-3 rounded-lg font-medium text-sm shadow-lg transition-all duration-200 cursor-pointer ${
+                  loading 
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none' 
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:brightness-110 active:scale-[0.99]'
                 }`}
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Analizando Huella Acústica...</span>
-                  </>
-                ) : (
-                  <span>Iniciar Diagnóstico Asistido</span>
-                )}
+                {loading ? 'Analizando Huella Acústica...' : 'Iniciar Diagnóstico Asistido'}
               </button>
             </form>
+          </section>
 
-            {error && (
-              <div className="mt-4 p-4 bg-pulse-50 border border-pulse-100 rounded-xl flex items-start space-x-3 text-pulse-900">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-pulse-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm font-medium">{error}</p>
-              </div>
-            )}
-          </div>
+          {/* Columna Derecha: Resultado Actual */}
+          <section className="bg-slate-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm min-h-[390px] flex flex-col justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-teal-400 mb-4 flex items-center gap-2">
+                <span>📊</span> Resultado Inmediato
+              </h2>
 
-          {/* Columna Derecha: Resultados */}
-          <div className="space-y-6">
-            {result ? (
-              <div className={`p-6 rounded-2xl shadow-md border animate-fadeIn bg-white ${
-                result.prediction_code === 0 ? 'border-health-100' : 'border-pulse-100'
-              }`}>
-                <h3 className="text-md font-bold text-slate-500 uppercase tracking-wider mb-4">Resultado del Screening</h3>
-                
-                {/* Badge de Diagnóstico */}
-                <div className="flex items-center space-x-4 mb-6">
-                  <div className={`p-4 rounded-xl ${
-                    result.prediction_code === 0 ? 'bg-health-100 text-health-600' : 'bg-pulse-100 text-pulse-600'
-                  }`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+              {!result && !loading && (
+                <div className="h-48 flex flex-col items-center justify-center text-center text-slate-500 border border-slate-800/60 border-dashed rounded-xl bg-slate-900/20">
+                  <span className="text-3xl mb-2">🩺</span>
+                  <p className="text-xs">Esperando procesamiento de señales biométricas...</p>
+                </div>
+              )}
+
+              {loading && (
+                <div className="h-48 flex flex-col items-center justify-center text-center">
+                  <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+                  <p className="text-xs text-slate-400 font-mono">Inferencia algorítmica y persistencia en paralelo...</p>
+                </div>
+              )}
+
+              {result && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                      <span className="block text-[10px] font-mono text-slate-500 uppercase">Clasificación IA</span>
+                      <span className={`text-base font-bold ${result.diagnosis.startsWith('Normal') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {result.diagnosis}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                      <span className="block text-[10px] font-mono text-slate-500 uppercase">Certeza</span>
+                      <span className="text-base font-bold text-teal-400">{(result.probability * 100).toFixed(0)}%</span>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase">Clasificación</div>
-                    <div className={`text-2xl font-black ${
-                      result.prediction_code === 0 ? 'text-health-600' : 'text-pulse-600'
-                    }`}>
-                      {result.diagnosis}
+
+                  <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-1.5">
+                    <span className="block text-[10px] font-mono text-slate-500 uppercase mb-1">Registro Médico Confirmado</span>
+                    <div className="text-xs grid grid-cols-1 gap-y-1 text-slate-300 font-mono">
+                      <div><span className="text-slate-500">ID Caso:</span> #{result.id}</div>
+                      <div><span className="text-slate-500">Paciente:</span> {result.nombre_paciente} ({result.cedula_paciente})</div>
+                      <div><span className="text-slate-500">Archivo:</span> <span className="text-slate-400 text-[11px]">{result.filename}</span></div>
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Barra de Probabilidad */}
-                <div className="space-y-2 mb-6">
-                  <div className="flex justify-between text-sm font-bold text-slate-600">
-                    <span>Certeza del Modelo Algorítmico</span>
-                    <span>{(result.probability * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${
-                        result.prediction_code === 0 ? 'bg-health-500' : 'bg-pulse-500'
-                      }`}
-                      style={{ width: `${result.probability * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Enlace de AWS S3 */}
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="text-xs font-bold text-slate-400 uppercase mb-2">Persistencia en la Nube</div>
-                  <a 
-                    href={result.s3_url} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="inline-flex items-center space-x-2 text-sm text-sky-600 hover:text-sky-700 font-semibold underline break-all"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5 5 0 00-4.591-2.941A1 1 0 0010 7v1a4 4 0 00-4 4v2a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 00-1-1H7a3 3 0 013-3V5a5 5 0 014.9 4.1 1 1 0 00.9.9h.2A3 3 0 0113 16H7a3 3 0 01-3-3V15z" />
-                    </svg>
-                    <span>Ver archivo de auditoría en AWS S3</span>
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 bg-white h-full flex flex-col justify-center items-center py-16 shadow-inner">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="text-sm font-semibold">Esperando Señal Acústica</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-xs">Los resultados del diagnóstico asistido por IA aparecerán en este panel tras procesar el archivo.</p>
+            {result && result.s3_url && (
+              <div className="pt-4 border-t border-slate-800/80">
+                <a 
+                  href={result.s3_url} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-xs bg-slate-900 border border-slate-700 hover:border-teal-500/40 text-slate-200 px-4 py-2 rounded-lg transition-colors w-full justify-center"
+                >
+                  🌐 Abrir Telemetría de Audio en AWS S3 →
+                </a>
               </div>
             )}
-          </div>
-
+          </section>
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs font-medium text-slate-400">
-        <p>© 2026 AudioPulse AI — Desarrollado bajo especificaciones de Ingeniería de Sistemas y Salud Digital.</p>
-      </footer>
+        {/* Fila Inferior: Historial Clínico desde PostgreSQL */}
+        <section className="bg-slate-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <h2 className="text-lg font-semibold text-slate-300 mb-4 flex items-center gap-2">
+            <span>🗄️</span> Historial Clínico Local (Persistido en PostgreSQL)
+          </h2>
+
+          {history.length === 0 ? (
+            <p className="text-xs text-slate-500 font-mono py-4 text-center">No hay registros previos guardados en la base de datos.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300 font-mono">
+                <thead className="bg-slate-900 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="p-3">ID</th>
+                    <th className="p-3">Cédula</th>
+                    <th className="p-3">Paciente</th>
+                    <th className="p-3">Diagnóstico</th>
+                    <th className="p-3">Certeza</th>
+                    <th className="p-3">Fecha de Registro</th>
+                    <th className="p-3 text-center">Auditoría</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {history.map((record) => (
+                    <tr key={record.id} className="hover:bg-slate-900/40 transition-colors">
+                      <td className="p-3 text-slate-500">#{record.id}</td>
+                      <td className="p-3 font-medium text-slate-200">{record.cedula_paciente}</td>
+                      <td className="p-3 text-slate-300">{record.nombre_paciente}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                          record.diagnosis.startsWith('Normal') 
+                            ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/50' 
+                            : 'bg-rose-950/40 text-rose-400 border border-rose-900/50'
+                        }`}>
+                          {record.diagnosis}
+                        </span>
+                      </td>
+                      <td className="p-3 text-teal-400 font-bold">{(record.probability * 100).toFixed(0)}%</td>
+                      <td className="p-3 text-slate-400">{new Date(record.created_at).toLocaleString()}</td>
+                      <td className="p-3 text-center">
+                        <a 
+                          href={record.s3_url} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-teal-400 hover:underline hover:text-teal-300"
+                        >
+                          Reproducir 🎧
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+      </main>
     </div>
   );
 }
-
-export default App;

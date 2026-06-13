@@ -1,0 +1,65 @@
+services:
+  # 1. Servicio del Backend de Inteligencia Artificial (FastAPI)
+  backend_ai:
+    build:
+      context: ./audiopulse-ai
+      dockerfile: Dockerfile
+    container_name: audiopulse_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./audiopulse-ai/.env
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  # 2. Servicio de la Base de Datos Relacional (PostgreSQL)
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: audiopulse_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: crashtitan2003
+      POSTGRES_DB: audiopulse_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d audiopulse_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Servicio de la Interfaz Médica (React + Nginx)
+  frontend_ui:
+    build:
+      context: ./audiopulse-ui
+      dockerfile: Dockerfile
+    container_name: audiopulse_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend_ai
+
+  # 4. Panel Visual de Base de Datos (pgAdmin)
+  pgadmin_panel:
+    image: dpage/pgadmin4
+    container_name: audiopulse_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: juan@audiopulse.ai
+      PGADMIN_DEFAULT_PASSWORD: AdminPassword2026
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres_db
+
+volumes:
+  postgres_data:
+  pgadmin_data:

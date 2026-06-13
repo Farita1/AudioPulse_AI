@@ -6,22 +6,28 @@ import pandas as pd
 import joblib
 import boto3
 from datetime import datetime
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from typing import List
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
-# Cargamos las variables de entorno desde el archivo .env en la raíz
+# Importaciones de nuestro nuevo módulo de Base de Datos
+from .database import engine, Base, get_db
+from .models_db import PacienteScreening
+
 load_dotenv()
 
-# Inicializamos la aplicación FastAPI
+# Creamos las tablas de la base de datos en Postgres al arrancar
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
     title="AudioPulse AI API",
-    description="API de Machine Learning con almacenamiento en AWS S3 para señales biométricas cardíacas.",
-    version="1.1.1"
+    description="API de Machine Learning con persistencia en PostgreSQL y AWS S3.",
+    version="1.2.0"
 )
 
-# Configuración de CORS para el Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inicializamos el cliente de AWS S3 usando las variables de entorno
+# Inicializamos cliente de S3
 try:
     s3_client = boto3.client(
         's3',
@@ -40,38 +46,38 @@ try:
     )
     BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
     REGION = os.getenv('AWS_REGION')
-    print(f"☁️ Conexión inicializada con el bucket S3: {BUCKET_NAME}")
+    print(f"☁️ Conexión S3 activa: {BUCKET_NAME}")
 except Exception as e:
     s3_client = None
-    print(f"❌ Error al conectar con AWS S3: {e}")
+    print(f"❌ Error S3: {e}")
 
-# Rutas absolutas para el modelo de ML
+# Cargar Modelo de IA
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, '..', 'models', 'heartbeat_classifier.joblib')
 
 if os.path.exists(MODEL_PATH):
     model = joblib.load(MODEL_PATH)
-    print(f"¡Modelo de IA cargado exitosamente desde {MODEL_PATH}!")
+    print("¡Modelo de IA cargado exitosamente!")
 else:
     model = None
-    print(f"⚠️ Advertencia: No se encontró ningún modelo en {MODEL_PATH}.")
 
-CLASS_MAPPING = {
-    0: "Normal",
-    1: "Anómalo (Soplo / Murmur)"
-}
+CLASS_MAPPING = {0: "Normal", 1: "Anómalo (Soplo / Murmur)"}
 
-# Estructura de respuesta que incluye los datos de AWS
+# Esquemas de Pydantic para validación de respuestas
 class PredictionResponse(BaseModel):
+    id: int
+    cedula_paciente: str
+    nombre_paciente: str
     filename: str
-    prediction_code: int
     diagnosis: str
     probability: float
     s3_url: str
-    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 def process_live_audio(audio_bytes, n_mfcc=13):
-    """ Extrae las características acústicas MFCC del audio en memoria """
     audio_file = io.BytesIO(audio_bytes)
     audio, sample_rate = librosa.load(audio_file, sr=None)
     mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=n_mfcc)
@@ -79,79 +85,79 @@ def process_live_audio(audio_bytes, n_mfcc=13):
     return mfccs_processed.reshape(1, -1)
 
 def upload_to_s3(audio_bytes, filename, folder):
-    """ Sube el archivo de audio a AWS S3 de forma organizada y genera su URL pública """
     if not s3_client:
         return "S3_NOT_CONFIGURED"
-        
-    # Añadimos un timestamp al nombre para evitar colisiones/duplicados en S3
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     s3_filename = f"{folder}/{timestamp}_{filename}"
-    
     try:
-        # Subimos los bytes del archivo directamente
         s3_client.put_object(
             Bucket=BUCKET_NAME,
             Key=s3_filename,
             Body=audio_bytes,
             ContentType='audio/wav'
         )
-        # Construimos la URL de acceso del objeto guardado
-        url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{s3_filename}"
-        return url
+        return f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{s3_filename}"
     except Exception as e:
-        print(f"Error subiendo a S3: {str(e)}")
+        print(f"Error S3: {e}")
         return "UPLOAD_FAILED"
 
 @app.get("/")
 def read_root():
-    return {
-        "message": "AudioPulse AI API activa",
-        "model_loaded": model is not None,
-        "s3_connected": s3_client is not None,
-        "status": "Online"
-    }
+    return {"message": "AudioPulse AI API v1.2.0 activa", "status": "Online"}
 
 @app.post("/api/v1/predict", response_model=PredictionResponse)
-async def predict_heartbeat(file: UploadFile = File(...)):
+async def predict_heartbeat(
+    cedula: str = Form(...),
+    nombre: str = Form(...),
+    edad: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     if model is None:
         raise HTTPException(status_code=500, detail="El modelo de IA no está disponible.")
     
     if not file.filename.lower().endswith(('.wav', '.mp3')):
-        raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Debe ser .wav o .mp3")
+        raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Debe ser .wav")
     
     try:
-        # Leemos los bytes del audio entrante
         audio_bytes = await file.read()
         
-        # 1. Ejecutamos el pipeline DSP local sobre los bytes
+        # 1. Pipeline de DSP e Inferencia
         features_array = process_live_audio(audio_bytes)
-        
-        # CORRECCIÓN DE ADVERTENCIA: Convertimos el array de NumPy en un DataFrame de Pandas
-        # asignando explícitamente los mismos nombres de columnas con los que se entrenó el modelo.
         feature_names = [f'mfcc_{i+1}' for i in range(features_array.shape[1])]
         features_df = pd.DataFrame(features_array, columns=feature_names)
         
-        # 2. Ejecutamos inferencia usando el DataFrame estructurado
         prediction = int(model.predict(features_df)[0])
         probabilities = model.predict_proba(features_df)[0]
         confidence = float(probabilities[prediction])
-        
         diagnosis_text = CLASS_MAPPING.get(prediction, "Desconocido")
         
-        # 3. Definimos carpeta de destino en S3 según el diagnóstico para estructurar la data médica
+        # 2. Persistencia en AWS S3
         s3_folder = "predicciones/normales" if prediction == 0 else "predicciones/anomalos"
-        
-        # 4. Subimos el archivo a la nube de AWS
         s3_url = upload_to_s3(audio_bytes, file.filename, s3_folder)
         
-        return PredictionResponse(
+        # 3. Persistencia en Base de Datos PostgreSQL
+        nuevo_registro = PacienteScreening(
+            cedula_paciente=cedula,
+            nombre_paciente=nombre,
+            edad_paciente=edad,
             filename=file.filename,
-            prediction_code=prediction,
             diagnosis=diagnosis_text,
             probability=round(confidence, 4),
-            s3_url=s3_url,
-            status="success"
+            s3_url=s3_url
         )
         
+        db.add(nuevo_registro)
+        db.commit()
+        db.refresh(nuevo_registro)  # Nos devuelve el registro con su ID auto-generado
+        
+        return nuevo_registro
+        
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Error en el servidor: {str(e)}")
+
+@app.get("/api/v1/history", response_model=List[PredictionResponse])
+def get_screening_history(db: Session = Depends(get_db)):
+    """ Retorna el historial clínico completo ordenado desde el más reciente """
+    return db.query(PacienteScreening).order_by(PacienteScreening.created_at.desc()).all()
